@@ -1,0 +1,35 @@
+# Runs the offline tests (no Webots needed) on every push and pull request:
+# kinematics, IK, trajectories, planner, camera geometry, the controller's
+# state machine against a kinematic stand-in for Webots, and the exercise checker.
+#
+# If this project is placed inside a larger repository (e.g. webots-projects),
+# move this file to that repository's .github/workflows/ and set
+# PROJECT_DIR to the project's path.
+name: tests
+
+on:
+  push:
+  pull_request:
+
+env:
+  PROJECT_DIR: .
+
+jobs:
+  offline-tests:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: pip install -r ${{ env.PROJECT_DIR }}/requirements.txt pytest
+      - name: Run tests
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: python -m pytest tests -v
+      - name: Exercise templates are untouched
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: python exercises/check.py
