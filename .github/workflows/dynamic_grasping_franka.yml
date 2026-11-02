@@ -3,7 +3,7 @@
 # state machine against a kinematic stand-in for Webots, and the exercise checker.
 #
 # This file belongs in the root .github/workflows/ of webots-projects
-# (e.g. as dynamic_grasping_franka.yml). It only runs when this project changes.
+# as dynamic_grasping_franka.yml. It only runs when this project changes.
 name: dynamic_grasping_franka
 
 on:

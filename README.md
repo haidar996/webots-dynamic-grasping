@@ -185,8 +185,6 @@ projects/dynamic_grasping_franka/
 ├── exercises/                           six exercises + check.py
 ├── tests/                               offline tests, Webots test runner, GUI end-to-end check
 ├── tools/make_edupanda_proto.py         regenerates protos/EduPanda.proto
-├── .github/workflows/tests.yml          runs the offline tests (Python 3.10–3.13); belongs in the
-│                                        repository's root .github/workflows/
 ├── docs/LESSONS.md                      the lessons, step by step
 ├── docs/user_guide/user_guide.html      the user guide (images in docs/images/)
 └── PORTING_NOTES.md                     what changed from MuJoCo, and why
@@ -202,7 +200,8 @@ python3 -m pytest tests -q
 These check the kinematics against Franka's published DH table, the IK, the quintic limits, the
 planner, the camera geometry, the exercise checker, and the controller's whole state machine run
 against a small kinematic stand-in for Webots (`tests/fake_webots/`). GitHub Actions runs them on
-every change to this project.
+every change to this project, on Python 3.10–3.13
+(`.github/workflows/dynamic_grasping_franka.yml` at the root of webots-projects).
 
 ### Tests in real Webots (no clicking needed)
 
