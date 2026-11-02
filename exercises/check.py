@@ -3,11 +3,15 @@ check.py — tests your exercise solutions against the robot's own code.
 
     python3 exercises/check.py        check every exercise
     python3 exercises/check.py 3      check exercise 3 only
+    python3 exercises/check.py --folder=DIR   check the files in DIR (e.g. a student's copy)
 
-The lesson window's "Exercises" tab runs the same checks.
+The lesson window's "Exercises" tab runs the same checks, with
+``--json``: one JSON line per exercise, in a separate process, so that a
+mistake such as an endless loop cannot freeze the simulation.
 """
 
 import importlib.util
+import json
 import sys
 import traceback
 from pathlib import Path
@@ -124,29 +128,46 @@ def load(module_name, folder):
     return module
 
 
+def check_one(n, module_name, title, checker, folder=HERE):
+    """Check one exercise; returns a dict (number, title, status, message)."""
+    try:
+        checker(load(module_name, folder))
+        return {"n": n, "title": title, "status": "pass", "message": "Correct!"}
+    except NotImplementedError:
+        return {"n": n, "title": title, "status": "todo",
+                "message": f"Not started: open exercises/{module_name}.py"}
+    except AssertionError as e:
+        return {"n": n, "title": title, "status": "fail", "message": str(e)}
+    except Exception as e:                               # a bug in the student's code
+        last = traceback.extract_tb(e.__traceback__)[-1]
+        return {"n": n, "title": title, "status": "error",
+                "message": f"{type(e).__name__}: {e} (line {last.lineno})"}
+
+
+def selected(numbers=None):
+    return [ex for ex in EXERCISES if not numbers or ex[0] in numbers]
+
+
 def run(numbers=None, folder=HERE):
     """Run the checks; returns a list of dicts (number, title, status, message)."""
-    results = []
-    for n, module_name, title, checker in EXERCISES:
-        if numbers and n not in numbers:
-            continue
-        try:
-            checker(load(module_name, folder))
-            results.append({"n": n, "title": title, "status": "pass", "message": "Correct!"})
-        except NotImplementedError:
-            results.append({"n": n, "title": title, "status": "todo",
-                            "message": f"Not started: open exercises/{module_name}.py"})
-        except AssertionError as e:
-            results.append({"n": n, "title": title, "status": "fail", "message": str(e)})
-        except Exception as e:                           # a bug in the student's code
-            last = traceback.extract_tb(e.__traceback__)[-1]
-            results.append({"n": n, "title": title, "status": "error",
-                            "message": f"{type(e).__name__}: {e} (line {last.lineno})"})
-    return results
+    return [check_one(*ex, folder=folder) for ex in selected(numbers)]
 
 
 if __name__ == "__main__":
-    wanted = {int(a) for a in sys.argv[1:]} or None
+    args = sys.argv[1:]
+    as_json = "--json" in args
+    folders = [a.split("=", 1)[1] for a in args if a.startswith("--folder=")]
+    folder = Path(folders[-1]) if folders else HERE
+    wanted = {int(a) for a in args if not a.startswith("--")} or None
     icons = {"pass": "✔", "todo": "·", "fail": "✘", "error": "!"}
-    for r in run(wanted):
-        print(f"{icons[r['status']]} Exercise {r['n']}: {r['title']:<38} {r['message']}")
+    if as_json:
+        # First the list of exercises, then one line per result as soon as it
+        # is known: if an exercise never finishes, the caller still gets the
+        # results before it and knows which one is stuck.
+        print(json.dumps({"exercises": [[n, title] for n, _, title, _ in selected(wanted)]}), flush=True)
+    for ex in selected(wanted):
+        r = check_one(*ex, folder=folder)
+        if as_json:
+            print(json.dumps(r), flush=True)
+        else:
+            print(f"{icons[r['status']]} Exercise {r['n']}: {r['title']:<38} {r['message']}")

@@ -67,7 +67,7 @@
   <div class="chapter-no">Webots teaching example · user guide</div>
   <h1>Dynamic Grasping Lab</h1>
   <div class="sub">Catching a moving ball with the Franka Emika Panda — a hands-on robotics course in one simulation</div>
-  <figure><img src="img/scene_2.6.png" alt="The Panda catching the ball"></figure>
+  <figure><img src="../images/scene_2.6.jpg" alt="The Panda catching the ball"></figure>
   <p>A ball slides across the floor. A 7-joint robot arm <b>sees</b> it with a ceiling camera,
   <b>predicts</b> where it is going, <b>decides</b> where and when to meet it, <b>moves</b> there in
   time and <b>closes its gripper</b> at the right instant. Every one of those steps is a classic robotics
@@ -159,11 +159,17 @@ sudo apt install ./webots_2025a_amd64.deb</pre>
   installed, set the right one in Webots: <i>Tools → Preferences → Python command</i>.</div>
 
   <h2>2.3 The project</h2>
-  <p>Download or clone the repository and keep the folder structure as it is:</p>
-<pre>git clone https://github.com/haidar996/webots-dynamic-grasping.git
-cd webots-dynamic-grasping</pre>
-  <p>The robot's 3D model files are included, so the simulation also works offline. The first time you
-  open the world, Webots may download the floor and sky textures; without internet it uses plain colours.</p>
+  <p>The project is the folder <code>projects/dynamic_grasping_franka</code> of the
+  <a href="https://github.com/cyberbotics/webots-projects">webots-projects</a> repository. To get only
+  this folder (keep its structure as it is):</p>
+<pre>git clone --depth 1 --filter=blob:none --sparse https://github.com/cyberbotics/webots-projects.git
+cd webots-projects
+git sparse-checkout set projects/dynamic_grasping_franka
+cd projects/dynamic_grasping_franka</pre>
+  <p>Or download the whole repository as a ZIP from its GitHub page and open
+  <code>projects/dynamic_grasping_franka</code>.</p>
+  <p>The first time you open the world, Webots downloads the official Panda 3D model files (about
+  11 MB) and the floor and sky textures, then keeps them in its cache, so later runs also work offline.</p>
 </section>
 
 <!-- ═════════════════════════════ 3 ═════════════════════════════ -->
@@ -186,8 +192,8 @@ cd webots-dynamic-grasping</pre>
   </ol>
   <figure>
     <div class="two">
-      <img src="img/scene_0.3.png" alt="Approach">
-      <img src="img/scene_3.9.png" alt="Caught">
+      <img src="../images/scene_0.3.jpg" alt="Approach">
+      <img src="../images/scene_3.9.jpg" alt="Caught">
     </div>
     <figcaption>Left: the ball (orange) slides along the predicted path; red dots are meeting points that were too late,
     the green dot is the chosen one; coloured axes show the target poses; the green disc is where the robot can grasp.
@@ -232,16 +238,16 @@ cd webots-dynamic-grasping</pre>
 
 <section class="chapter">
   <h2>4.3 The tabs in pictures</h2>
-  <figure><img src="img/window_camera.png" alt="Camera tab" style="width:76%">
+  <figure><img src="../images/window_camera.png" alt="Camera tab" style="width:76%">
     <figcaption>Camera tab: the ball is found 0.9 mm from its true position. The table explains each step of the detection.</figcaption></figure>
-  <figure><img src="img/window_planner.png" alt="Planner tab" style="width:76%">
+  <figure><img src="../images/window_planner.png" alt="Planner tab" style="width:76%">
     <figcaption>Planner tab: candidate meeting points on the map, and the chart where "time needed" first drops below "time available".</figcaption></figure>
 </section>
 
 <section class="chapter">
-  <figure><img src="img/window_motion.png" alt="Motion tab" style="width:76%">
+  <figure><img src="../images/window_motion.png" alt="Motion tab" style="width:76%">
     <figcaption>Motion tab: the measured joint angle (blue) follows the quintic reference (orange) within a few milliradians.</figcaption></figure>
-  <figure><img src="img/window_gripper.png" alt="Gripper tab" style="width:76%">
+  <figure><img src="../images/window_gripper.png" alt="Gripper tab" style="width:76%">
     <figcaption>Gripper tab: the fingers stop at the ball's radius (3 cm) and the force rises to the grip force you set.</figcaption></figure>
 </section>
 
@@ -262,7 +268,7 @@ cd webots-dynamic-grasping</pre>
   <p>The robot pauses five times: before PLAN, APPROACH, DESCEND, WAIT and LIFT. Nothing is lost while
   paused: the plan and the predictions are shifted in time along with the frozen ball, so the catch
   still works after a long pause.</p>
-  <figure><img src="img/window_paused.png" alt="Teaching mode with quiz" style="width:92%">
+  <figure><img src="../images/window_paused.png" alt="Teaching mode with quiz" style="width:92%">
     <figcaption>Paused before PLAN: the pipeline outlines the next phase, the lesson explains it, and the quiz has just been answered correctly.</figcaption></figure>
 </section>
 
@@ -382,7 +388,7 @@ dq_cmd = dq_desired + K_p · (q_desired − q_measured)      (joint control)</di
     <tr><td><code>--perception=simulator</code></td><td>Start with exact positions instead of the camera.</td></tr>
     <tr><td><code>--grip-force=5</code></td><td>Starting grip force in newtons.</td></tr>
     <tr><td><code>--script=file.json</code></td><td>Play a list of window commands: a hands-free classroom demo.</td></tr>
-    <tr><td><code>--record-movie=demo.mp4</code></td><td>Record the 3D view from the launch to the result.</td></tr>
+    <tr><td><code>--record-movie=demo.mp4</code></td><td>Record the 3D view of the first launch, until just after its result.</td></tr>
     <tr><td><code>--exit-on-result</code></td><td>Quit Webots when the catch ends (exit code 0 = caught).</td></tr>
   </table>
   <h2>9.2 A scripted demo</h2>
@@ -424,7 +430,7 @@ tests/run_webots_tests.sh           # about 8–10 minutes</pre>
   <p>This runs every scenario, a 46-step tour of every feature, and an end-to-end check of the lab
   window (headless Chrome clicks through it and reports any JavaScript error). It ends with
   <b>ALL PASSED</b>. While it runs, minimized Webots windows come and go: do not close them.</p>
-  <div class="box tip"><b>Last verified result</b> (Webots R2025a, Ubuntu 22.04): 20/20 offline tests;
+  <div class="box tip"><b>Last verified result</b> (Webots R2025a, Ubuntu 22.04): 25/25 offline tests;
   7/7 scenarios; all 46 tour steps; 44/44 window checks; no errors or warnings.</div>
 </section>
 
@@ -438,7 +444,7 @@ tests/run_webots_tests.sh           # about 8–10 minutes</pre>
     <tr><td>I cannot find the lab window</td><td>Double-click the robot arm, or right-click it → <i>Show Robot Window</i>. On Linux it opens in your browser, not inside Webots.</td></tr>
     <tr><td><i>Launch ball</i> is greyed out</td><td>The arm is not home yet. Press <i>Reset</i> and wait about 2 seconds.</td></tr>
     <tr><td>"No module named numpy" in the Webots console</td><td>Install NumPy for the Python that Webots uses, or set it in <i>Tools → Preferences → Python command</i>.</td></tr>
-    <tr><td>The robot is invisible or grey</td><td>The 3D model files are in <code>protos/meshes/</code>; keep the folder structure unchanged.</td></tr>
+    <tr><td>The robot is invisible or grey</td><td>Webots could not download the Panda 3D model files. Connect to the internet once and reopen the world (<i>File → Reload World</i>); they are cached afterwards.</td></tr>
     <tr><td>Floor or sky look plain</td><td>Webots could not download textures (no internet). Harmless.</td></tr>
     <tr><td>"The camera could not see the ball"</td><td>The ball started outside the camera image or under the arm. Start it further away, or switch Perception to <i>Simulator</i>.</td></tr>
     <tr><td>"No feasible intercept"</td><td>The ball never passes where the arm can be in time. Aim it through the green disc, slow it down, or raise the arm speed.</td></tr>
@@ -467,7 +473,7 @@ tests/run_webots_tests.sh           # about 8–10 minutes</pre>
   <table>
     <tr><th style="width:30%">Elsewhere</th><th>Contents</th></tr>
     <tr><td><code>worlds/</code></td><td>The scene: arm with ceiling camera, ball, frictionless floor.</td></tr>
-    <tr><td><code>protos/</code></td><td>The robot model (<code>EduPanda.proto</code>), the Panda hand and the meshes.</td></tr>
+    <tr><td><code>protos/</code></td><td>The robot model (<code>EduPanda.proto</code>); it uses the official Panda meshes and hand from Webots R2025a.</td></tr>
     <tr><td><code>plugins/robot_windows/</code></td><td>The lab window (HTML, CSS, JavaScript).</td></tr>
     <tr><td><code>exercises/</code></td><td>The six exercises and their checker.</td></tr>
     <tr><td><code>tests/</code></td><td>Offline tests, the Webots test runner, the window check.</td></tr>

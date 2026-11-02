@@ -10,12 +10,13 @@ camera view, quizzes, programming exercises and a teaching mode that freezes the
 every phase.
 
 <p align="center">
-  <img src="docs/images/demo.gif" width="80%" alt="The Panda catching a sliding ball in Webots">
+  <img src="https://github.com/user-attachments/assets/03d1c03b-c137-48f9-a5df-eb32ac90c04f" width="80%" alt="The Panda catching a sliding ball in Webots">
   <br><em>Webots R2025a: the arm catches a ball sliding at 0.4 m/s. Cyan: the predicted path. Red dots:
-  meeting points that were too late. Green: the chosen one. Full video: <a href="docs/images/demo.mp4">demo.mp4</a>.</em>
+  meeting points that were too late. Green: the chosen one. Full video: <a href="https://github.com/user-attachments/assets/b0dc7b48-759a-46ce-b6bc-4f6d66073bf1">demo.mp4</a>.</em>
 </p>
 
-> 📘 **New here? Start with the [User Guide (PDF)](docs/Dynamic_Grasping_Lab_User_Guide.pdf):** installing,
+> 📘 **New here? Start with the User Guide:** open [`docs/user_guide/user_guide.html`](docs/user_guide/user_guide.html)
+> in your web browser (or download the [PDF version](https://github.com/haidar996/webots-dynamic-grasping/releases/download/user-guide/Dynamic_Grasping_Lab_User_Guide.pdf)). It covers installing,
 > your first catch, a tour of the lab window, teaching mode, the seven phases, experiments, exercises,
 > teacher tools and troubleshooting, in 16 illustrated pages.
 
@@ -46,13 +47,21 @@ comparisons. The goal is to see each idea working inside a complete system.
 
 **Requirements:** [Webots R2025a](https://cyberbotics.com/) and Python 3 with NumPy
 (`pip install -r requirements.txt`). Nothing else: no Pinocchio, no solvers, no compiled code.
-The robot meshes are included, so it also works offline.
+The first run downloads the official Panda meshes (about 11 MB); Webots keeps them in its cache.
+
+This project is part of [webots-projects](https://github.com/cyberbotics/webots-projects). To get
+only this folder:
 
 ```bash
-git clone https://github.com/haidar996/webots-dynamic-grasping.git
-cd webots-dynamic-grasping
+git clone --depth 1 --filter=blob:none --sparse https://github.com/cyberbotics/webots-projects.git
+cd webots-projects
+git sparse-checkout set projects/dynamic_grasping_franka
+cd projects/dynamic_grasping_franka
 pip install -r requirements.txt
 ```
+
+(Or download the [whole repository as a ZIP](https://github.com/cyberbotics/webots-projects/archive/refs/heads/master.zip)
+and open `projects/dynamic_grasping_franka`.)
 
 1. Open `worlds/dynamic_grasping.wbt` in Webots and press ▶ (run).
    The arm moves to its ready pose.
@@ -72,7 +81,7 @@ pip install -r requirements.txt
 | `--perception=simulator` | use exact positions instead of the camera |
 | `--grip-force=5` | starting grip force in newtons |
 | `--script=file.json` | play a list of window commands: a hands-free classroom demo (see `command_script.py`) |
-| `--record-movie=demo.mp4` | record the 3D view from launch to the result |
+| `--record-movie=demo.mp4` | record the 3D view of the first launch, until just after its result |
 | `--exit-on-result` | quit Webots when the catch ends (exit code 0 = caught), for automated checks |
 
 ---
@@ -158,10 +167,10 @@ with the code the robot runs and gives a hint when something is off.
 ## Project layout
 
 ```
-dynamic_grasping_franka/
+projects/dynamic_grasping_franka/
 ├── worlds/dynamic_grasping.wbt          the scene: arm + ceiling camera, ball, frictionless floor
-├── protos/EduPanda.proto                Panda arm (generated, see tools/)
-├── protos/PandaHand.proto, meshes/      official Panda hand and meshes, stored locally (works offline)
+├── protos/EduPanda.proto                Panda arm (generated, see tools/); uses the official
+│                                        R2025a meshes and PandaHand by URL
 ├── controllers/dynamic_grasping/
 │   ├── dynamic_grasping.py              state machine, joint controller, tracking, window messages
 │   ├── config.py                        every tunable number in one place
@@ -176,8 +185,11 @@ dynamic_grasping_franka/
 ├── exercises/                           six exercises + check.py
 ├── tests/                               offline tests, Webots test runner, GUI end-to-end check
 ├── tools/make_edupanda_proto.py         regenerates protos/EduPanda.proto
-├── .github/workflows/tests.yml          runs the offline tests on every push (Python 3.8–3.12)
-└── docs/LESSONS.md, PORTING_NOTES.md
+├── .github/workflows/tests.yml          runs the offline tests (Python 3.10–3.13); belongs in the
+│                                        repository's root .github/workflows/
+├── docs/LESSONS.md                      the lessons, step by step
+├── docs/user_guide/user_guide.html      the user guide (images in docs/images/)
+└── PORTING_NOTES.md                     what changed from MuJoCo, and why
 ```
 
 ### Tests (no Webots needed)
@@ -190,7 +202,7 @@ python3 -m pytest tests -q
 These check the kinematics against Franka's published DH table, the IK, the quintic limits, the
 planner, the camera geometry, the exercise checker, and the controller's whole state machine run
 against a small kinematic stand-in for Webots (`tests/fake_webots/`). GitHub Actions runs them on
-every push.
+every change to this project.
 
 ### Tests in real Webots (no clicking needed)
 
@@ -221,4 +233,6 @@ Dr. Essa Alghannam). Robot meshes and the Panda hand come from the Webots Franka
 
 ## License
 
-Apache License 2.0 (see [LICENSE](LICENSE)), the same license as Webots and its Franka Emika Panda model.
+Apache License 2.0, the license of the [webots-projects](https://github.com/cyberbotics/webots-projects)
+repository (and of Webots and its Franka Emika Panda model). Both authors of the original project
+agreed to release this port under it.

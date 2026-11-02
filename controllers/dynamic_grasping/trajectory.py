@@ -28,6 +28,8 @@ def quintic_duration(q_start, q_end, speed_scale=1.0):
 
     ``speed_scale`` (0 … 1] lets you run the arm slower than its limits.
     """
+    if not speed_scale > 0:
+        raise ValueError(f"speed_scale must be positive, got {speed_scale}")
     dq = np.abs(np.asarray(q_end) - np.asarray(q_start))
     T = np.max(15.0 * dq / (8.0 * DQ_MAX * speed_scale))
     return max(float(T), MIN_SEGMENT_TIME)

@@ -14,10 +14,13 @@ teaching example, and why. Two kinds of change are mixed here, and each item say
 **[engine] A dedicated `EduPanda.proto` instead of the stock `Panda.proto`.**
 The official Webots `Panda.proto` stores its links at a non-zero starting pose: joints 4–7 carry
 `position` values and pre-rotated link transforms. When I rebuilt its kinematic chain offline, it did
-not match the standard Panda DH table under the interpretation I tried. Since Webots was not
-available to check how it handles those fields, `tools/make_edupanda_proto.py` builds a new
-PROTO with every joint taken straight from the URDF joint frames at 0 rad. It **reuses the
-official meshes, collision shapes, masses and the official `PandaHand`**. The controller's PoE model,
+not match the standard Panda DH table. The cause, found with Cyberbotics' help: in the R2025a
+file, the `position` fields of joints 4 and 5 (−1.7708 and −1.6) do not match the pose the links are
+actually stored at (−1.6 and 0), so the joint angles Webots reports are offset from Franka's
+convention. A fix for the official PROTO is being proposed to Webots. Until it is released,
+`tools/make_edupanda_proto.py` builds a PROTO with every joint taken straight from the URDF joint
+frames at 0 rad. It **reuses the official meshes, collision shapes, masses and the official
+`PandaHand`**, loaded by versioned URL from the Webots R2025a repository. The controller's PoE model,
 Franka's DH table and the PROTO's joint frames agree to about 1e-5 m (checked in
 `tests/test_algorithms.py` and offline against the generated PROTO). At runtime the window's
 **FK check** compares the PoE prediction with a GPS at the TCP.
@@ -143,10 +146,11 @@ mode through five pauses with a quiz answered, IK lab, grip-force warning, drop,
 All passed, with no JavaScript errors. The window was also used by hand in the Webots GUI on Ubuntu,
 where it opens in the default browser.
 
-Also checked offline (20 tests, run by GitHub Actions on Python 3.8–3.12): the PoE model matches
+Also checked offline (25 tests, run by GitHub Actions on Python 3.10–3.13): the PoE model matches
 Franka's DH table (1e-6) and the PROTO joint frames (1e-5 m); IK, quintic limits, planner, camera
-back-projection, the exercise checker, and the state machine against a kinematic stand-in for Webots
-whose camera has the same 16 ms frame delay as Webots.
+back-projection, the exercise checker (including its time limit), the handling of bad window
+messages, and the state machine against a kinematic stand-in for Webots whose camera has the same
+16 ms frame delay as Webots.
 
 **Bugs the Webots runs found** (all fixed; each now has a regression test where possible):
 
@@ -161,12 +165,12 @@ whose camera has the same 16 ms frame delay as Webots.
 6. Teaching-mode pauses: the predictions, the planned meeting time and the stored camera frames must
    all be shifted by the pause, or the line fit sees a ball that "stood still".
 
-**[engine] Assets are stored in the project.** The Ubuntu Webots package downloads PROTO files and
-meshes on demand, and on a slow connection the Panda meshes failed to download ("Connection
-closed"). The 10 official Panda meshes (≈ 10.5 MB, Apache 2.0) and a copy of `PandaHand.proto` are
-therefore kept in `protos/`, so the example works offline. The world's remaining external PROTOs use
-versioned `https://raw.githubusercontent.com/cyberbotics/webots/R2025a/...` URLs; the `webots://`
-form only works if the PROTO files are installed locally.
+**[engine] Assets are referenced by versioned URL.** The Ubuntu Webots package downloads PROTO files
+and meshes on demand. The official Panda meshes and `PandaHand.proto` are therefore referenced with
+versioned `https://raw.githubusercontent.com/cyberbotics/webots/R2025a/...` URLs, like the world's
+other external PROTOs; the `webots://` form only works if the PROTO files are installed locally.
+Webots caches the downloaded files, so after the first run the example also works offline. On a
+slow connection the first download can fail ("Connection closed"); reloading the world retries it.
 
 **[engine] Supervisor changes apply one step later.** When the ball is moved to its launch
 position, `getPosition()` still returns the *old* position during that same step. The first

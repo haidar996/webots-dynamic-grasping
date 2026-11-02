@@ -36,12 +36,14 @@ Optional controllerArgs (in the world file):
     --exit-on-result             quit Webots when the catch ends (for automated checks)
     --script=file.json           play a list of window commands (see command_script.py)
     --perception=camera|simulator  where ball positions come from (default: config.py)
-    --record-movie=file.mp4      record the 3D view from launch until shortly after the result
+    --record-movie=file.mp4      record the 3D view of the first launch, until shortly after its result
 """
 
-import importlib.util
 import json
+import math
+import subprocess
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -60,6 +62,9 @@ PAUSE_POINTS = ("PLAN", "APPROACH", "DESCEND", "WAIT", "LIFT")   # teaching-mode
 TELEMETRY_PERIOD = 0.02    # s
 TRAIL_PERIOD = 0.04        # s
 CAMERA_STREAM_PERIOD = 0.25  # s between camera images sent to the robot window
+MOVIE_TAIL = 1.0           # s of video kept after the result, so the movie shows it
+EXERCISE_TIMEOUT = 10.0    # s (wall clock) before the exercise checker is stopped
+CHECK_SCRIPT = Path(__file__).resolve().parents[2] / "exercises" / "check.py"
 
 
 class DynamicGraspingDemo:
@@ -119,6 +124,11 @@ class DynamicGraspingDemo:
         self.script = None
         self.quit_time = None
         self.movie_file = None
+        self.movie_state = None         # None → "recording" → "encoding" → "done"
+        self.movie_stop_time = None
+        self.window_connected = False   # stream to the robot window only once it said hello
+        self.camera_view = False        # ... and camera images only while the Camera tab is shown
+        self.exercise_run = None
         for arg in sys.argv[1:]:
             if arg.startswith("--launch="):
                 self.auto_launch = [float(v) for v in arg.split("=", 1)[1].split(",")]
@@ -225,6 +235,13 @@ class DynamicGraspingDemo:
         if self.state != "IDLE":
             self.log("Press Reset first so the arm returns home, then launch.", "warn")
             return
+        if math.hypot(x, y) < C.MIN_RADIUS_XY:
+            self.log(f"Launch refused: ({x:.2f}, {y:.2f}) is inside the robot's base column. "
+                     f"Start the ball at least {C.MIN_RADIUS_XY:.2f} m from the base.", "warn")
+            return
+        if speed < 0:
+            self.log("Launch refused: the speed cannot be negative.", "warn")
+            return
         self.launch = {"x": x, "y": y, "speed": speed, "heading": heading_deg}
         h = np.radians(heading_deg)
         v = np.array([np.cos(h), np.sin(h), 0.0]) * speed
@@ -236,8 +253,7 @@ class DynamicGraspingDemo:
         self.tracked_frames = 0
         self.gripper.open()
         self.log(f"Ball launched from ({x:.2f}, {y:.2f}) at {speed:.2f} m/s, heading {heading_deg:.0f}°")
-        if self.movie_file:
-            self.robot.movieStartRecording(self.movie_file, 1280, 720, 0, 95, 1, False)
+        self.start_movie()
         self.set_state("OBSERVE")
 
     def do_reset(self):
@@ -301,6 +317,7 @@ class DynamicGraspingDemo:
                 self.log("No intercept found: the ball never passes where the arm can be in time.", "warn")
                 self.robot.setLabel(1, "NO FEASIBLE INTERCEPT", 0.35, 0.45, 0.15, 0xFF5050, 0, "Arial")
                 self.set_state("NO_PLAN")
+                self.schedule_movie_stop()
                 if self.exit_on_result:
                     self.quit_later(1)
                 return
@@ -460,19 +477,42 @@ class DynamicGraspingDemo:
             q_lift = self.plan["q_pregrasp"]
         self.start_motion(q_lift, max(1.0, quintic_duration(self.q(), q_lift, 0.5)))
 
+    # ── movie (--record-movie): one recording, from the first launch until
+    #    MOVIE_TAIL seconds after its result ─────────────────────────────────
+    def start_movie(self):
+        if self.movie_file and self.movie_state is None:
+            self.robot.movieStartRecording(self.movie_file, 1280, 720, 0, 95, 1, False)
+            self.movie_state = "recording"
+
+    def schedule_movie_stop(self):
+        if self.movie_state == "recording" and self.movie_stop_time is None:
+            self.movie_stop_time = self.robot.getTime() + MOVIE_TAIL
+
+    def update_movie(self):
+        if self.movie_state == "recording" and self.movie_stop_time is not None \
+                and self.robot.getTime() >= self.movie_stop_time:
+            self.robot.movieStopRecording()
+            self.movie_state = "encoding"
+        elif self.movie_state == "encoding" and self.robot.movieIsReady():
+            self.movie_state = "done"
+            if self.robot.movieFailed():
+                self.log(f"Movie recording failed ({self.movie_file}).", "warn")
+            else:
+                self.log(f"Movie saved: {self.movie_file}")
+
     def quit_later(self, code):
         """Quit after a short delay so the last messages reach the console."""
         self.quit_code, self.quit_time = code, self.robot.getTime() + 0.2
-        if self.movie_file:
-            self.quit_time += 1.0                     # let the movie show the result
+        if self.movie_state == "recording":
+            self.quit_time += MOVIE_TAIL              # let the movie show the result
 
     def stop_movie_and_quit(self):
-        if self.movie_file:
-            self.robot.movieStopRecording()
-            while not self.robot.movieIsReady():      # wait for the encoder to finish
-                if self.robot.step(self.dt_ms) == -1:
-                    return
-            print("Movie saved" if not self.robot.movieFailed() else "Movie recording failed")
+        if self.movie_state == "recording":
+            self.movie_stop_time = self.robot.getTime()
+        while self.movie_state in ("recording", "encoding"):   # wait for the encoder
+            self.update_movie()
+            if self.movie_state == "encoding" and self.robot.step(self.dt_ms) == -1:
+                return
         self.robot.simulationQuit(self.quit_code)
 
     def finish(self, outcome, text):
@@ -483,6 +523,7 @@ class DynamicGraspingDemo:
         self.log(text, "success" if outcome == "CAUGHT" else "warn")
         self.state = outcome
         self.send("phase", phase=outcome)
+        self.schedule_movie_stop()
         if self.exit_on_result:
             self.quit_later(0 if outcome == "CAUGHT" else 1)
 
@@ -490,12 +531,26 @@ class DynamicGraspingDemo:
     #  Robot-window messages
     # ═════════════════════════════════════════════════════════════════════════
     def handle_message(self, text):
-        msg = json.loads(text)
+        """Apply one window (or script) command; a bad message is reported, never fatal."""
+        try:
+            msg = json.loads(text)
+            if not isinstance(msg, dict):
+                raise ValueError("expected a JSON object")
+            self.apply_command(msg)
+        except (ValueError, KeyError, TypeError) as e:
+            self.log(f"Ignored a bad window message ({type(e).__name__}: {e}): {text[:120]}", "warn")
+
+    def apply_command(self, msg):
         cmd = msg.get("cmd")
         if cmd == "hello":
+            self.window_connected = True
+            self.camera_view = bool(msg.get("camera_view", False))
             self.send_hello()
+        elif cmd == "camera_view":
+            self.camera_view = bool(msg["on"])
+            self.last_camera_stream = -1.0            # send a fresh image right away
         elif cmd == "launch":
-            self.do_launch(float(msg["x"]), float(msg["y"]), float(msg["speed"]), float(msg["heading"]))
+            self.do_launch(*number(msg, "x", "y", "speed", "heading"))
         elif cmd == "reset":
             self.do_reset()
         elif cmd == "teach":
@@ -505,9 +560,15 @@ class DynamicGraspingDemo:
         elif cmd == "next" and self.state == "PAUSED":
             self.resume()
         elif cmd == "grip_force":
-            self.gripper.grip_force = float(msg["value"])
+            [force] = number(msg, "value")
+            if force <= 0:
+                raise ValueError(f"grip force must be positive, got {force}")
+            self.gripper.grip_force = force
         elif cmd == "arm_speed":
-            self.speed_scale = float(msg["value"])
+            [scale] = number(msg, "value")
+            if not 0 < scale <= 1:                    # 0 would make every motion last forever
+                raise ValueError(f"arm speed must be in (0, 1], got {scale}")
+            self.speed_scale = scale
         elif cmd == "markers":
             self.markers.enabled = bool(msg["on"]) and self.markers.children is not None
             if not self.markers.enabled:
@@ -516,7 +577,8 @@ class DynamicGraspingDemo:
             self.perception = msg["value"]
             self.log(f"Ball positions now come from the {msg['value']}.")
         elif cmd == "check_exercises":
-            self.send("exercises", results=run_exercise_checks())
+            if self.exercise_run is None:
+                self.exercise_run = ExerciseRun()
         elif cmd == "ik_goal":
             self.do_ik_goal(msg)
 
@@ -536,12 +598,13 @@ class DynamicGraspingDemo:
         if self.state != "IDLE":
             self.log("The IK playground works when the arm is idle (press Reset).", "warn")
             return
-        yaw = np.radians(float(msg.get("yaw", 0.0)))
+        x, y, z = number(msg, "x", "y", "z")
+        yaw = np.radians(number({"yaw": 0.0, **msg}, "yaw")[0])
         T = np.eye(4)
         T[:3, :3] = np.array([[np.cos(yaw), np.sin(yaw), 0],
                               [np.sin(yaw), -np.cos(yaw), 0],
                               [0, 0, -1]])                       # pointing down, rotated by yaw
-        T[:3, 3] = [float(msg["x"]), float(msg["y"]), float(msg["z"])]
+        T[:3, 3] = [x, y, z]
         q_sol, ok, info = solve_ik(T, self.q(), rng=self.rng)
         self.send("ik", ok=ok, q=q_sol, iterations=info["iterations"],
                   history=info["history"][:100], seeds=info.get("seeds_tried", 1),
@@ -625,13 +688,22 @@ class DynamicGraspingDemo:
             self.gripper.update()
 
             now = self.robot.getTime()
+            self.update_movie()
             if self.quit_time is not None and now >= self.quit_time:
                 self.quit_time = None
                 self.stop_movie_and_quit()
-            if now - self.last_telemetry >= TELEMETRY_PERIOD:
+            if self.exercise_run is not None:
+                results = self.exercise_run.poll()
+                if results is not None:
+                    self.exercise_run = None
+                    self.send("exercises", results=results)
+            # Stream to the robot window only once it is open (it says hello),
+            # and the camera image only while the Camera tab is visible.
+            if self.window_connected and now - self.last_telemetry >= TELEMETRY_PERIOD:
                 self.last_telemetry = now
                 self.send_telemetry()
-            if now - self.last_camera_stream >= CAMERA_STREAM_PERIOD:
+            if self.window_connected and self.camera_view and \
+                    now - self.last_camera_stream >= CAMERA_STREAM_PERIOD:
                 self.last_camera_stream = now
                 self.send_camera()
             if now - self.last_trail >= TRAIL_PERIOD and self.state in (
@@ -640,16 +712,69 @@ class DynamicGraspingDemo:
                 self.markers.extend_trail(self.tcp_measured())
 
 
-def run_exercise_checks():
-    """Run exercises/check.py (the student exercises) and return its results."""
-    path = Path(__file__).resolve().parents[2] / "exercises" / "check.py"
-    try:
-        spec = importlib.util.spec_from_file_location("exercise_check", path)
-        checker = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(checker)
-        return checker.run()
-    except Exception as e:                      # keep the robot running whatever happens
-        return [{"n": 0, "title": "checker", "status": "error", "message": f"{type(e).__name__}: {e}"}]
+class ExerciseRun:
+    """Runs exercises/check.py in its own process, so that student code (an
+    endless loop, a crash) can never freeze or kill the simulation.  The
+    simulation keeps running meanwhile; ``poll`` is called every step."""
+
+    def __init__(self, extra_args=()):
+        self.started = time.monotonic()
+        try:
+            self.proc = subprocess.Popen([sys.executable, str(CHECK_SCRIPT), "--json", *extra_args],
+                                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            self.error = None
+        except OSError as e:
+            self.proc, self.error = None, f"Could not start the checker: {e}"
+
+    def poll(self):
+        """None while the checker runs, then its list of results."""
+        if self.proc is None:
+            return [{"n": 0, "title": "checker", "status": "error", "message": self.error}]
+        timed_out = time.monotonic() - self.started > EXERCISE_TIMEOUT
+        if self.proc.poll() is None and not timed_out:
+            return None
+        if self.proc.poll() is None:
+            self.proc.kill()
+        out, err = self.proc.communicate()
+        return self.parse(out, err, timed_out)
+
+    @staticmethod
+    def parse(out, err, timed_out):
+        exercises, results = [], {}
+        for line in out.splitlines():           # skip anything the student's code printed
+            try:
+                item = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(item, dict) and "exercises" in item:
+                exercises = item["exercises"]
+            elif isinstance(item, dict) and {"n", "title", "status", "message"} <= item.keys():
+                results[item["n"]] = item
+        if not exercises:                       # the checker itself failed to start
+            last = err.strip().splitlines()[-1] if err.strip() else "no output"
+            return [{"n": 0, "title": "checker", "status": "error", "message": last}]
+        checked, first_missing = [], True
+        for n, title in exercises:
+            if n in results:
+                checked.append(results[n])
+                continue
+            if not timed_out:
+                message = "The checker stopped before this exercise."
+            elif first_missing:                 # the exercise that never finished
+                message = f"Timed out after {EXERCISE_TIMEOUT:.0f} s: is there an endless loop?"
+            else:
+                message = "Not checked: the exercise before it never finished."
+            checked.append({"n": n, "title": title, "status": "error", "message": message})
+            first_missing = False
+        return checked
+
+
+def number(msg, *keys):
+    """The message's values for these keys, as finite floats (else ValueError)."""
+    values = [float(msg[k]) for k in keys]
+    if not all(math.isfinite(v) for v in values):
+        raise ValueError(f"{', '.join(keys)} must be finite numbers")
+    return values
 
 
 def _to_json(obj):

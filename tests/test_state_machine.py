@@ -146,3 +146,40 @@ def test_reset_and_ik_playground():
     assert run_until(demo, lambda: demo.state == "IDLE")
     ik = [json.loads(m) for m in demo.robot.outbox if '"type": "ik"' in m][-1]
     assert ik["ok"] and ik["error"] < 1e-3
+
+
+def test_bad_messages_are_reported_not_fatal():
+    demo = make_demo()
+    run_until(demo, lambda: demo.state == "IDLE")
+    for bad in ("not json", "[1, 2]", '{"cmd": "launch", "x": 0.5}',
+                '{"cmd": "grip_force", "value": "strong"}', '{"cmd": "arm_speed", "value": NaN}'):
+        demo.robot.inbox.append(bad)
+    send(demo, cmd="arm_speed", value=0)          # would divide by zero in quintic_duration
+    send(demo, cmd="grip_force", value=-3)
+    run_until(demo, lambda: not demo.robot.inbox)
+    warnings = [json.loads(m) for m in demo.robot.outbox if '"Ignored a bad window message' in m]
+    assert len(warnings) == 7
+    assert demo.speed_scale == 1.0 and demo.gripper.grip_force > 0
+    send(demo, cmd="launch", x=0.5, y=-0.8, speed=0.3, heading=90)   # still works afterwards
+    assert run_until(demo, lambda: demo.state == "CAUGHT")
+
+
+def test_launch_inside_the_base_is_refused():
+    demo = make_demo()
+    run_until(demo, lambda: demo.state == "IDLE")
+    send(demo, cmd="launch", x=0.1, y=0.05, speed=0.3, heading=0)
+    run_until(demo, lambda: not demo.robot.inbox)
+    assert demo.state == "IDLE"
+    assert any("inside the robot's base column" in m for m in demo.robot.outbox)
+
+
+def test_nothing_is_streamed_before_the_window_says_hello():
+    demo = make_demo()
+    run_until(demo, lambda: demo.state == "IDLE")
+    assert not demo.window_connected and not demo.camera_view
+    send(demo, cmd="hello", camera_view=False)
+    run_until(demo, lambda: not demo.robot.inbox)
+    assert demo.window_connected and not demo.camera_view
+    send(demo, cmd="camera_view", on=True)
+    run_until(demo, lambda: not demo.robot.inbox)
+    assert demo.camera_view

@@ -1,35 +1,39 @@
-# Runs the offline tests (no Webots needed) on every push and pull request:
+# Offline tests of projects/dynamic_grasping_franka (no Webots needed):
 # kinematics, IK, trajectories, planner, camera geometry, the controller's
 # state machine against a kinematic stand-in for Webots, and the exercise checker.
 #
-# If this project is placed inside a larger repository (e.g. webots-projects),
-# move this file to that repository's .github/workflows/ and set
-# PROJECT_DIR to the project's path.
-name: tests
+# This file belongs in the root .github/workflows/ of webots-projects
+# (e.g. as dynamic_grasping_franka.yml). It only runs when this project changes.
+name: dynamic_grasping_franka
 
 on:
   push:
+    paths:
+      - "projects/dynamic_grasping_franka/**"
+      - ".github/workflows/dynamic_grasping_franka.yml"
   pull_request:
+    paths:
+      - "projects/dynamic_grasping_franka/**"
+      - ".github/workflows/dynamic_grasping_franka.yml"
 
-env:
-  PROJECT_DIR: .
+defaults:
+  run:
+    working-directory: projects/dynamic_grasping_franka
 
 jobs:
   offline-tests:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.8", "3.10", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
-        run: pip install -r ${{ env.PROJECT_DIR }}/requirements.txt pytest
+        run: pip install -r requirements.txt pytest
       - name: Run tests
-        working-directory: ${{ env.PROJECT_DIR }}
         run: python -m pytest tests -v
       - name: Exercise templates are untouched
-        working-directory: ${{ env.PROJECT_DIR }}
         run: python exercises/check.py

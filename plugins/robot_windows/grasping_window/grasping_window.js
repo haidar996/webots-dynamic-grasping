@@ -615,9 +615,13 @@ function renderIk() {
 // ═══════════════════════════════════════════════════════════════════════════
 const cameraBuffer = document.createElement('canvas');
 
+function cameraTabShown() {
+  return document.getElementById('tab-camera').classList.contains('active');
+}
+
 function onCamera(msg) {
   ui.camera = msg;
-  if (document.getElementById('tab-camera').classList.contains('active')) renderCamera();
+  if (cameraTabShown()) renderCamera();
 }
 
 function renderCamera() {
@@ -813,6 +817,7 @@ function setupUi() {
       $(`tab-${b.dataset.tab}`).classList.add('active');
       if (b.dataset.tab === 'planner') renderPlanner();
       if (b.dataset.tab === 'camera') renderCamera();
+      send('camera_view', {on: cameraTabShown()});   // camera images are sent only while it is shown
       renderLive();
     };
   });
@@ -827,8 +832,10 @@ window.robotWindow = new RobotWindow();
 window.robotWindow.receive = receive;
 setupUi();
 // Ask the controller for its configuration until it answers.
+// The controller starts streaming telemetry once it gets this hello.
+const sayHello = () => send('hello', {camera_view: cameraTabShown()});
 const helloTimer = setInterval(() => {
   if (ui.connected) clearInterval(helloTimer);
-  else send('hello');
+  else sayHello();
 }, 1000);
-send('hello');
+sayHello();
