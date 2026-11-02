@@ -17,7 +17,9 @@ The official Webots `Panda.proto` stores its links at a non-zero starting pose: 
 not match the standard Panda DH table. The cause, found with Cyberbotics' help: in the R2025a
 file, the `position` fields of joints 4 and 5 (−1.7708 and −1.6) do not match the pose the links are
 actually stored at (−1.6 and 0), so the joint angles Webots reports are offset from Franka's
-convention. A fix for the official PROTO is being proposed to Webots. Until it is released,
+convention. With these two values corrected, the official chain matches Franka's model to less than
+0.001 mm in Webots; the fix is proposed in
+[cyberbotics/webots#7078](https://github.com/cyberbotics/webots/pull/7078). Until it is released,
 `tools/make_edupanda_proto.py` builds a PROTO with every joint taken straight from the URDF joint
 frames at 0 rad. It **reuses the official meshes, collision shapes, masses and the official
 `PandaHand`**, loaded by versioned URL from the Webots R2025a repository. The controller's PoE model,
